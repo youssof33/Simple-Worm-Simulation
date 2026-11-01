@@ -80,6 +80,7 @@ style.configure(
 # ================= STATE =================
 
 node_colors = {}
+edge_colors = {}
 
 def reset_node_colors():
     for pc, data in network.items():
@@ -281,11 +282,11 @@ def get_positions():
     height = max(canvas.winfo_height(), 300)
 
     return {
-        "PC1": (width * 0.13, height * 0.25),
+        "PC1": (width * 0.15, height * 0.50),
         "PC2": (width * 0.50, height * 0.25),
-        "PC3": (width * 0.87, height * 0.25),
-        "PC4": (width * 0.50, height * 0.75),
-        "PC5": (width * 0.87, height * 0.75)
+        "PC3": (width * 0.50, height * 0.75),
+        "PC4": (width * 0.85, height * 0.25),
+        "PC5": (width * 0.85, height * 0.75)
     }
 
 
@@ -302,12 +303,15 @@ def draw_network(event=None):
         for target in data["links"]:
             if pc < target:
                 x2, y2 = positions[target]
+                edge_key = tuple(sorted([pc, target]))
+                line_color = edge_colors.get(edge_key, "#64748B")
+                line_width = 4 if edge_key in edge_colors else 3
 
                 canvas.create_line(
                     x1, y1,
                     x2, y2,
-                    fill="#64748B",
-                    width=3
+                    fill=line_color,
+                    width=line_width
                 )
 
     # Draw PCs
@@ -316,14 +320,22 @@ def draw_network(event=None):
 
         color = node_colors[pc]
 
+        # Highlight currently active scanning PC with a glowing outline
+        if running and pc == current_pc:
+            outline_color = "#38BDF8"
+            outline_width = 4
+        else:
+            outline_color = WHITE
+            outline_width = 2
+
         canvas.create_oval(
             x - 35,
             y - 35,
             x + 35,
             y + 35,
             fill=color,
-            outline=WHITE,
-            width=2
+            outline=outline_color,
+            width=outline_width
         )
 
         canvas.create_text(
@@ -502,6 +514,7 @@ def start_simulation():
     infected_pcs.clear()
     infected_files.clear()
     queue.clear()
+    edge_colors.clear()
 
     reset_node_colors()
 
@@ -539,15 +552,16 @@ def process_next():
 
     global current_pc, neighbor_index
 
-    if not queue:
-        finish_simulation()
-        return
-
     if current_pc is None:
+        if not queue:
+            finish_simulation()
+            return
+
         current_pc = queue.popleft()
         neighbor_index = 0
 
         log(f"\n[SCAN] Checking {current_pc}...", BLUE)
+        draw_network()
 
     links = network[current_pc]["links"]
 
@@ -558,14 +572,19 @@ def process_next():
 
     target = links[neighbor_index]
     neighbor_index += 1
+    edge_key = tuple(sorted([current_pc, target]))
 
     if target in infected_pcs:
 
         log(f"[SKIP] {target} already visited", GRAY)
+        if edge_key not in edge_colors:
+            edge_colors[edge_key] = GRAY
+        draw_network()
 
     elif network[target]["firewall"]:
 
         node_colors[target] = RED
+        edge_colors[edge_key] = RED
 
         log(
             f"[BLOCKED] {target}: Firewall enabled",
@@ -577,6 +596,7 @@ def process_next():
     elif not network[target]["vulnerable"]:
 
         node_colors[target] = YELLOW
+        edge_colors[edge_key] = YELLOW
 
         log(
             f"[FAILED] {target}: Not vulnerable",
@@ -586,6 +606,8 @@ def process_next():
         draw_network()
 
     else:
+
+        edge_colors[edge_key] = GREEN
 
         log(
             f"[CONNECTED] {current_pc} -> {target}",
@@ -616,6 +638,7 @@ def finish_simulation():
     log("==================================", BLUE)
 
     update_stats()
+    draw_network()
 
     status_label.config(
         text="Simulation completed",
@@ -638,6 +661,7 @@ def reset_simulation():
     infected_pcs.clear()
     infected_files.clear()
     queue.clear()
+    edge_colors.clear()
 
     current_pc = None
     neighbor_index = 0
