@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Technical Report: Network Worm Propagation & Defensive Architecture</title>
+<style>
+  :root {
+    --primary: #0f172a;
+    --primary-light: #1e293b;
+    --accent: #2563eb;
+    --accent-dark: #1d4ed8;
+    --success: #16a34a;
+    --danger: #dc2626;
+    --warning: #d97706;
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --border: #e2e8f0;
+    --bg-card: #f8fafc;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text-main);
+    background-color: #cbd5e1;
+    font-size: 9.5pt;
+    line-height: 1.45;
+  }
+
+  /* A4 Page Formatting */
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  .page {
+    width: 210mm;
+    height: 297mm;
+    margin: 10mm auto;
+    padding: 14mm 16mm;
+    background: #ffffff;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    page-break-after: always;
+    break-after: page;
+    overflow: hidden;
+  }
+
+  @media print {
+    body {
+      background: none;
+    }
+    .page {
+      margin: 0;
+      width: 210mm;
+      height: 297mm;
+      box-shadow: none;
+      page-break-after: always;
+      break-after: page;
+    }
+  }
+
+  /* Content Flow Containers */
+  .page-content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  /* Header & Footer */
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid var(--primary);
+    padding-bottom: 4px;
+    margin-bottom: 6px;
+  }
+
+  .header-tag {
+    font-size: 7.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+  }
+
+  .header-title {
+    font-size: 8pt;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .page-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--border);
+    padding-top: 5px;
+    font-size: 7.5pt;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* Typography */
+  h1 {
+    font-size: 19pt;
+    font-weight: 800;
+    color: var(--primary);
+    line-height: 1.15;
+    letter-spacing: -0.5px;
+  }
+
+  h2 {
+    font-size: 11pt;
+    font-weight: 700;
+    color: var(--primary);
+    border-left: 3.5px solid var(--accent);
+    padding-left: 7px;
+    margin-top: 2px;
+    margin-bottom: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  h3 {
+    font-size: 9.5pt;
+    font-weight: 700;
+    color: var(--primary-light);
+    margin-bottom: 2px;
+  }
+
+  p {
+    text-align: justify;
+    color: var(--text-main);
+  }
+
+  /* Cards & Grid Containers */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
+  }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 7px 9px;
+  }
+
+  .card-highlight {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+  }
+
+  .card-alert {
+    background: #fef2f2;
+    border-color: #fecaca;
+  }
+
+  .card-info {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+  }
+
+  /* Callouts & Badges */
+  .badge {
+    display: inline-block;
+    padding: 1.5px 6px;
+    border-radius: 3px;
+    font-size: 7pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .badge-red { background: #fee2e2; color: #991b1b; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-yellow { background: #fef3c7; color: #92400e; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5pt;
+  }
+
+  th, td {
+    padding: 4.5px 7px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    background-color: var(--primary);
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  tr:nth-child(even) {
+    background-color: #f8fafc;
+  }
+
+  /* Diagrams & Visual Schematics */
+  .diagram-container {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Numbered Steps */
+  .step-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .step-item {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .step-num {
+    background: var(--accent);
+    color: white;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 7.5pt;
+    font-weight: bold;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .step-text {
+    flex-grow: 1;
+    font-size: 8.8pt;
+  }
+
+  /* Key Takeaway Pill */
+  .key-takeaway {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    color: #ffffff;
+    border-radius: 5px;
+    padding: 8px 11px;
+  }
+
+  .key-takeaway h3 {
+    color: #38bdf8;
+    font-size: 9pt;
+    margin-bottom: 2px;
+  }
+
+  .key-takeaway p {
+    color: #cbd5e1;
+    font-size: 8.5pt;
+  }
+</style>
+</head>
+<body>
+
+<!-- ==========================================
+     PAGE 1: FOUNDATIONS & TOPOLOGY
+     ========================================== -->
+<div class="page">
+  <div class="page-header">
+    <span class="header-tag">Educational Cybersecurity Research Report</span>
+    <span class="header-title">Autonomous Threat Propagation & Defensive Dynamics</span>
+  </div>
+
+  <div class="page-content">
+    <!-- Title Section -->
+    <div style="border-bottom: 1px solid var(--border); padding-bottom: 6px;">
+      <h1 style="margin-bottom: 3px;">Autonomous Network Worm Propagation</h1>
+      <p style="font-size: 10.5pt; color: var(--accent); font-weight: 600;">
+        Architectural Analysis of Threat Diffusion, Algorithmic Propagation Models, and Dual-Layer Defense Mechanics
+      </p>
+    </div>
+
+    <!-- Executive Summary -->
+    <div class="card card-info">
+      <h3>Executive Summary</h3>
+      <p style="font-size: 8.8pt;">
+        This study examines the behavioral principles, propagation mechanics, and defensive resistance factors of autonomous self-replicating malware (computer worms). Unlike conventional viruses requiring host executable manipulation and human interaction, computer worms exploit transport-layer network topologies and systemic software vulnerabilities to spread autonomously. Through an educational finite-network model, this report evaluates how network graph topology, breadth-first algorithmic dissemination, perimeter firewall barriers, and host vulnerability mitigation dictate the blast radius of network-borne threats.
+      </p>
+    </div>
+
+    <!-- Section 1: Worm Fundamentals -->
+    <div>
+      <h2>1. The Fundamental Architecture of Computer Worms</h2>
+      <div class="grid-2" style="margin-top: 5px;">
+        <div class="card">
+          <h3>Autonomy & Vector Characteristics</h3>
+          <p style="font-size: 8.5pt;">
+            A <strong>computer worm</strong> is a standalone software program that replicates itself over communications channels without needing an existing host program. Its operational cycle comprises five interconnected phases:
+          </p>
+          <ul style="font-size: 8.2pt; padding-left: 15px; margin-top: 4px; color: var(--text-main);">
+            <li><strong>Reconnaissance:</strong> Scanning and discovering adjacent node interfaces.</li>
+            <li><strong>Probing:</strong> Interrogating remote ports for exposed services.</li>
+            <li><strong>Exploitation:</strong> Delivering a specialized vector into target memory.</li>
+            <li><strong>Payload Execution:</strong> Harvest, exfiltration, or persistence.</li>
+            <li><strong>Self-Replication:</strong> Spawning a new propagation instance.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Worms vs. Viruses vs. Trojans</h3>
+          <table style="font-size: 7.8pt; margin-top: 2px;">
+            <tr>
+              <th>Threat Type</th>
+              <th>Host File Required?</th>
+              <th>Human Vector?</th>
+              <th>Primary Propagation</th>
+            </tr>
+            <tr>
+              <td><strong>Worm</strong></td>
+              <td>No (Independent)</td>
+              <td>No (Autonomous)</td>
+              <td>Network Socket Scans</td>
+            </tr>
+            <tr>
+              <td><strong>Virus</strong></td>
+              <td>Yes (.exe, docs)</td>
+              <td>Yes (Execution)</td>
+              <td>File Sharing / Media</td>
+            </tr>
+            <tr>
+              <td><strong>Trojan</strong></td>
+              <td>Disguised Program</td>
+              <td>Yes (Installation)</td>
+              <td>Social Engineering</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: Network Topology -->
+    <div>
+      <h2>2. Topological Structure of the Model Network</h2>
+      <p style="font-size: 8.8pt; margin-bottom: 5px;">
+        Network propagation speed and containment boundaries are deeply influenced by graph topology. In this project, the network is modeled as an undirected cyclic graph \( G = (V, E) \) containing 5 host nodes interconnected across distinct structural pathways:
+      </p>
+
+      <div class="diagram-container">
+        <svg viewBox="0 0 540 135" width="530" height="135">
+          <!-- Connection Lines -->
+          <line x1="80" y1="68" x2="250" y2="28" stroke="#64748b" stroke-width="2.5" />
+          <line x1="80" y1="68" x2="250" y2="108" stroke="#64748b" stroke-width="2.5" />
+          <line x1="250" y1="28" x2="450" y2="28" stroke="#64748b" stroke-width="2.5" />
+          <line x1="250" y1="108" x2="450" y2="108" stroke="#64748b" stroke-width="2.5" />
+          <line x1="450" y1="28" x2="450" y2="108" stroke="#64748b" stroke-width="2.5" />
+
+          <!-- Node PC1 -->
+          <circle cx="80" cy="68" r="24" fill="#3b82f6" stroke="#1e293b" stroke-width="2" />
+          <text x="80" y="72" fill="#ffffff" font-size="10" font-weight="bold" text-anchor="middle">PC1</text>
+          <text x="80" y="103" fill="#1e293b" font-size="7.5" font-weight="bold" text-anchor="middle">Origin Node</text>
+
+          <!-- Node PC2 -->
+          <circle cx="250" cy="28" r="22" fill="#3b82f6" stroke="#1e293b" stroke-width="2" />
+          <text x="250" y="32" fill="#ffffff" font-size="10" font-weight="bold" text-anchor="middle">PC2</text>
+          <text x="250" y="60" fill="#1e293b" font-size="7.5" font-weight="bold" text-anchor="middle">Intermediate</text>
+
+          <!-- Node PC4 -->
+          <circle cx="450" cy="28" r="22" fill="#3b82f6" stroke="#1e293b" stroke-width="2" />
+          <text x="450" y="32" fill="#ffffff" font-size="10" font-weight="bold" text-anchor="middle">PC4</text>
+          <text x="450" y="60" fill="#1e293b" font-size="7.5" font-weight="bold" text-anchor="middle">Subnet Node</text>
+
+          <!-- Node PC3 -->
+          <circle cx="250" cy="108" r="22" fill="#dc2626" stroke="#1e293b" stroke-width="2" />
+          <text x="250" y="112" fill="#ffffff" font-size="10" font-weight="bold" text-anchor="middle">PC3</text>
+          <text x="250" y="133" fill="#dc2626" font-size="7.5" font-weight="bold" text-anchor="middle">Firewall Active</text>
+
+          <!-- Node PC5 -->
+          <circle cx="450" cy="108" r="22" fill="#d97706" stroke="#1e293b" stroke-width="2" />
+          <text x="450" y="112" fill="#ffffff" font-size="10" font-weight="bold" text-anchor="middle">PC5</text>
+          <text x="450" y="133" fill="#d97706" font-size="7.5" font-weight="bold" text-anchor="middle">Patched (Protected)</text>
+        </svg>
+      </div>
+
+      <div class="grid-2" style="margin-top: 6px;">
+        <div class="card">
+          <h3>Topological Properties</h3>
+          <p style="font-size: 8.2pt;">
+            The graph exhibits a dual-branch loop. From origin node <strong>PC1</strong>, communication can branch along the upper vector (PC2 &rarr; PC4) or the lower vector (PC3 &rarr; PC5). A critical cross-link bridges PC4 and PC5, providing redundancy.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Significance of Cyclic Paths</h3>
+          <p style="font-size: 8.2pt;">
+            In cyclic networks, worms can encounter already-infected hosts through alternate routes. Without state-tracking (visited lists), replication algorithms would enter infinite reflection loops, exhausting host network buffers.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>Technical Report &bull; Simple Worm Simulation Project</span>
+    <span>Page 1 of 4</span>
+  </div>
+</div>
+
+<!-- ==========================================
+     PAGE 2: ALGORITHM & EXFILTRATION
+     ========================================== -->
+<div class="page">
+  <div class="page-header">
+    <span class="header-tag">Educational Cybersecurity Research Report</span>
+    <span class="header-title">Algorithmic Modeling & Asset Exploitation</span>
+  </div>
+
+  <div class="page-content">
+    <!-- Section 3: BFS Mechanics -->
+    <div>
+      <h2>3. Algorithmic Modeling: Breadth-First Propagation</h2>
+      <p style="font-size: 8.8pt; margin-bottom: 5px;">
+        To accurately simulate real-world worm diffusion across a LAN without global omniscience, the propagation engine relies on <strong>Breadth-First Search (BFS)</strong>. BFS represents a wave-propagation model where threats compromise all immediate 1-hop perimeter peers before radiating outward into 2-hop neighborhoods.
+      </p>
+
+      <div class="grid-3" style="margin-top: 4px;">
+        <div class="card">
+          <h3>1. The FIFO Queue</h3>
+          <p style="font-size: 8.2pt;">
+            Maintains the chronological wavefront. Newly compromised nodes are appended to the back; the current scanning node is evaluated from the front. This enforces equitable, distance-ordered infection spread.
+          </p>
+        </div>
+        <div class="card">
+          <h3>2. Visited Host State</h3>
+          <p style="font-size: 8.2pt;">
+            Tracks compromised endpoints to prevent redundant exploitation. When a neighbor is discovered in the visited set, the link evaluation is immediately terminated with a bypass state, preventing network storms.
+          </p>
+        </div>
+        <div class="card">
+          <h3>3. Neighbor Iteration</h3>
+          <p style="font-size: 8.2pt;">
+            Each node interrogates only its physical links. The worm does not "teleport" across isolated segments; it must traverse adjacent edge paths sequentially, honoring network adjacency constraints.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Propagation Lifecycle Diagram -->
+    <div class="card" style="margin-top: 2px;">
+      <h3 style="margin-bottom: 4px;">Algorithmic Decision Tree per Discovered Neighbor</h3>
+      <div class="step-list">
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-text">
+            <strong>State Verification:</strong> Check if the target node is already compromised. If true, terminate exploration along this link (Status: <code>[SKIP]</code>).
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-text">
+            <strong>Network Perimeter Interrogation:</strong> Inspect whether the target perimeter filters connection traffic. If a firewall is active, incoming socket requests are dropped regardless of internal bugs (Status: <code>[BLOCKED]</code>).
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <div class="step-text">
+            <strong>Vulnerability Exploit Execution:</strong> If network transit is permitted, deliver the weaponized payload. If the remote service is hardened or patched against this exploit, execution fails (Status: <code>[FAILED]</code>).
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">4</div>
+          <div class="step-text">
+            <strong>Host Compromise & Queuing:</strong> If vulnerable and unblocked, mark node as <strong>INFECTED</strong>, trigger asset extraction, and append to the queue to propagate further (Status: <code>[CONNECTED]</code>).
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4: Data Exfiltration Mechanics -->
+    <div>
+      <h2>4. Data Harvesting & Selective Asset Exfiltration</h2>
+      <p style="font-size: 8.8pt; margin-bottom: 6px;">
+        Modern worms seldom act purely as denial-of-service weapons; they frequently serve as conduits for secondary exploitation, including credential harvesting, document exfiltration, and ransomware deployment.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>Selective Threat Targeting</h3>
+          <p style="font-size: 8.2pt;">
+            Worms maximize extraction efficiency by filtering storage volumes for high-value extensions while discarding high-volume multimedia noise:
+          </p>
+          <ul style="font-size: 8.2pt; padding-left: 15px; margin-top: 4px;">
+            <li><strong style="color: var(--accent);">Targeted Assets:</strong> Text files (<code>.txt</code>), programming scripts (<code>.py</code>), and structured spreadsheets/databases (<code>.csv</code>).</li>
+            <li><strong style="color: var(--text-muted);">Ignored Formats:</strong> Raw imagery (<code>.jpg</code>), video containers, or precompiled cache files.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Operational Intelligence Value</h3>
+          <p style="font-size: 8.2pt;">
+            Plaintext and scripting files provide adversaries with configuration keys, administrative credentials, API secrets, and proprietary operational documentation. By prioritizing lightweight structured files, the worm minimizes bandwidth spikes, evading volumetric network intrusion alarms.
+          </p>
+        </div>
+      </div>
+
+      <!-- Asset Inventory Table -->
+      <table style="margin-top: 7px;">
+        <thead>
+          <tr>
+            <th>Host Identifier</th>
+            <th>Local File Inventory</th>
+            <th>Target Evaluation</th>
+            <th>Security Implications</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>PC1</strong></td>
+            <td><code>doc.txt</code>, <code>script.py</code></td>
+            <td><span class="badge badge-green">Both Harvested</span></td>
+            <td>Exposes administrative automation scripts and system credentials.</td>
+          </tr>
+          <tr>
+            <td><strong>PC2</strong></td>
+            <td><code>report.txt</code>, <code>data.csv</code></td>
+            <td><span class="badge badge-green">Both Harvested</span></td>
+            <td>Leans into proprietary analytics reports and financial/user databases.</td>
+          </tr>
+          <tr>
+            <td><strong>PC3</strong></td>
+            <td><code>important.txt</code></td>
+            <td><span class="badge badge-red">Shielded by Firewall</span></td>
+            <td>Critical documentation preserved due to perimeter access isolation.</td>
+          </tr>
+          <tr>
+            <td><strong>PC4</strong></td>
+            <td><code>test.py</code>, <code>photo.jpg</code></td>
+            <td><span class="badge badge-yellow">Filtered (1 of 2)</span></td>
+            <td>Code harvest successful; non-target binary file correctly bypassed.</td>
+          </tr>
+          <tr>
+            <td><strong>PC5</strong></td>
+            <td><code>sample.txt</code></td>
+            <td><span class="badge badge-blue">Protected by Patch</span></td>
+            <td>Host immunity prevents worm foothold; files remain inaccessible.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>Technical Report &bull; Simple Worm Simulation Project</span>
+    <span>Page 2 of 4</span>
+  </div>
+</div>
+
+<!-- ==========================================
+     PAGE 3: DEFENSIVE ARCHITECTURES
+     ========================================== -->
+<div class="page">
+  <div class="page-header">
+    <span class="header-tag">Educational Cybersecurity Research Report</span>
+    <span class="header-title">Perimeter Defenses vs. Endpoint Hardening</span>
+  </div>
+
+  <div class="page-content">
+    <!-- Section 5: Dual Layer Defense -->
+    <div>
+      <h2>5. The Dual-Layer Defensive Paradigm</h2>
+      <p style="font-size: 8.8pt; margin-bottom: 6px;">
+        A central pedagogical objective of this model is illustrating the conceptual and operational distinction between <strong>Perimeter Network Firewalls</strong> and <strong>Host-Level Vulnerability Mitigation</strong>. While both prevent successful endpoint exploitation, they function at distinct layers of the security stack.
+      </p>
+
+      <div class="grid-2">
+        <!-- Firewall Card -->
+        <div class="card card-alert">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+            <h3>Perimeter Filtering: Firewall</h3>
+            <span class="badge badge-red">Network Layer</span>
+          </div>
+          <p style="font-size: 8.3pt; margin-bottom: 4px;">
+            <strong>Exemplified by PC3:</strong> Contains known software vulnerabilities (<code>vulnerable: True</code>), but is shielded by an active firewall (<code>firewall: True</code>).
+          </p>
+          <ul style="font-size: 8.1pt; padding-left: 14px;">
+            <li><strong>Enforcement Point:</strong> Ingress router, switch ACL, or edge interface.</li>
+            <li><strong>Mechanism:</strong> Drops incoming SYN packets before an active session is established.</li>
+            <li><strong>Behavior:</strong> The worm’s probe is rejected immediately. The underlying application vulnerability is never reached or tested.</li>
+            <li><strong>Vulnerability State:</strong> Unpatched but isolated.</li>
+          </ul>
+        </div>
+
+        <!-- Protected Card -->
+        <div class="card card-highlight">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+            <h3>Host Hardening: Protected</h3>
+            <span class="badge badge-green">Application / OS Layer</span>
+          </div>
+          <p style="font-size: 8.3pt; margin-bottom: 4px;">
+            <strong>Exemplified by PC5:</strong> No network firewall (<code>firewall: False</code>), but the local software is fully patched (<code>vulnerable: False</code>).
+          </p>
+          <ul style="font-size: 8.1pt; padding-left: 14px;">
+            <li><strong>Enforcement Point:</strong> Operating system kernel, memory space, and application daemon.</li>
+            <li><strong>Mechanism:</strong> Handshake completes; exploit payload is received but fails to trigger an error or arbitrary execution.</li>
+            <li><strong>Behavior:</strong> Connection connects, attack fails gracefully.</li>
+            <li><strong>Vulnerability State:</strong> Patched and resilient.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 6: Comprehensive Comparison Matrix -->
+    <div>
+      <h2>6. Comprehensive Defensive Comparison Matrix</h2>
+      <table style="margin-top: 4px;">
+        <thead>
+          <tr>
+            <th>Security Dimension</th>
+            <th>Firewall Barrier (PC3)</th>
+            <th>Vulnerability Hardening (PC5)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>OSI Model Layer</strong></td>
+            <td>Layer 3 (Network) & Layer 4 (Transport)</td>
+            <td>Layer 7 (Application) & Local System Architecture</td>
+          </tr>
+          <tr>
+            <td><strong>Connection Establishment</strong></td>
+            <td><strong>Denied:</strong> Connection refused or dropped at boundary</td>
+            <td><strong>Accepted:</strong> Socket opens, transaction initiates</td>
+          </tr>
+          <tr>
+            <td><strong>Threat Exposure</strong></td>
+            <td>Zero exposure to remote exploit payloads</td>
+            <td>Payload is parsed, but rejected safely by patched code</td>
+          </tr>
+          <tr>
+            <td><strong>Internal Host Security</strong></td>
+            <td>Inherent bugs remain latent and dangerous</td>
+            <td>Host is structurally robust against known attack vectors</td>
+          </tr>
+          <tr>
+            <td><strong>Vulnerability to Lateral Pivot</strong></td>
+            <td>High: If breached from behind, host falls instantly</td>
+            <td>Low: Resists exploit regardless of network angle of attack</td>
+          </tr>
+          <tr>
+            <td><strong>Operational Burden</strong></td>
+            <td>Ruleset maintenance, routing overhead</td>
+            <td>Continuous patch testing, system reboot cycles</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Section 7: Defense-in-Depth Principle -->
+    <div>
+      <h2>7. The Defense-in-Depth (DiD) Imperative</h2>
+      <p style="font-size: 8.8pt; margin-bottom: 6px;">
+        Neither perimeter filtering nor patch management provides complete protection when deployed in isolation. Real-world resilience relies on overlapping defensive tiers:
+      </p>
+
+      <div class="key-takeaway">
+        <h3>Strategic Principle: Why Single-Layer Defenses Collapse</h3>
+        <p>
+          If an enterprise relies <em>solely on firewalls</em>, a single compromised laptop or insider threat instantly bypasses the perimeter, allowing lateral infection of all internal unpatched nodes. Conversely, relying <em>solely on host patching</em> exposes internal infrastructure to zero-day vulnerabilities before patches can be developed. Resilient infrastructure demands <strong>Network Microsegmentation</strong> alongside <strong>Continuous Vulnerability Lifecycle Management</strong>.
+        </p>
+      </div>
+
+      <div class="grid-2" style="margin-top: 6px;">
+        <div class="card">
+          <h3>The Perimeter Fallacy</h3>
+          <p style="font-size: 8.2pt;">
+            Assuming the interior network is "trusted" once inside the firewall is the single greatest cause of catastrophic ransomware blast radius in modern networks.
+          </p>
+        </div>
+        <div class="card">
+          <h3>The Patch Latency Gap</h3>
+          <p style="font-size: 8.2pt;">
+            The window between vulnerability disclosure (CVE) and enterprise patch deployment averages 30–60 days. Firewalls and intrusion prevention systems provide critical shielding during this gap.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>Technical Report &bull; Simple Worm Simulation Project</span>
+    <span>Page 3 of 4</span>
+  </div>
+</div>
+
+<!-- ==========================================
+     PAGE 4: CASE STUDY & MITIGATIONS
+     ========================================== -->
+<div class="page">
+  <div class="page-header">
+    <span class="header-tag">Educational Cybersecurity Research Report</span>
+    <span class="header-title">Simulation Scenario Analysis & Industry Recommendations</span>
+  </div>
+
+  <div class="page-content">
+    <!-- Section 8: Simulation Case Study -->
+    <div>
+      <h2>8. Simulation Scenario Case Study (Patient Zero: PC1)</h2>
+      <p style="font-size: 8.8pt; margin-bottom: 5px;">
+        Tracking the execution timeline when infection originates at node <strong>PC1</strong> illustrates how network topology and defensive controls dictate the diffusion ceiling:
+      </p>
+
+      <div class="step-list">
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-text">
+            <strong>Initial Foothold:</strong> PC1 is infected as the root node. Local assets <code>doc.txt</code> and <code>script.py</code> are harvested. PC1 enters the processing queue.
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-text">
+            <strong>First Wave Evaluation:</strong> PC1 probes adjacent links PC2 and PC3.
+            <br>&bull; <em>Target PC2:</em> Vulnerable and unfirewalled &rarr; <strong>Infected</strong>. Files <code>report.txt</code>, <code>data.csv</code> harvested. PC2 queued.
+            <br>&bull; <em>Target PC3:</em> Firewall rule encountered &rarr; <strong>Access Blocked</strong>. PC3 remains safe; propagation along this branch is halted.
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <div class="step-text">
+            <strong>Second Wave Evaluation:</strong> PC2 dequeued; evaluates links PC1 and PC4.
+            <br>&bull; <em>Target PC1:</em> Detected in visited state &rarr; <strong>Skipped</strong> to eliminate loop reflection.
+            <br>&bull; <em>Target PC4:</em> Vulnerable and unfirewalled &rarr; <strong>Infected</strong>. File <code>test.py</code> harvested (image bypassed). PC4 queued.
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">4</div>
+          <div class="step-text">
+            <strong>Third Wave Evaluation:</strong> PC4 dequeued; evaluates links PC2 and PC5.
+            <br>&bull; <em>Target PC2:</em> Already visited &rarr; <strong>Skipped</strong>.
+            <br>&bull; <em>Target PC5:</em> Host patched against exploit &rarr; <strong>Exploit Failed</strong>. Infection fails; PC5 remains safe.
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">5</div>
+          <div class="step-text">
+            <strong>Queue Exhaustion & Containment:</strong> The queue empties. The infection has reached its structural ceiling.
+          </div>
+        </div>
+      </div>
+
+      <!-- Simulation Outcome Summary Box -->
+      <div class="card card-highlight" style="margin-top: 6px;">
+        <div class="grid-3" style="text-align: center;">
+          <div>
+            <div style="font-size: 15pt; font-weight: 800; color: var(--danger);">60%</div>
+            <div style="font-size: 7.5pt; color: var(--text-muted); font-weight: 600;">INFECTED HOSTS (3/5)</div>
+          </div>
+          <div>
+            <div style="font-size: 15pt; font-weight: 800; color: var(--success);">40%</div>
+            <div style="font-size: 7.5pt; color: var(--text-muted); font-weight: 600;">CONTAINED HOSTS (2/5)</div>
+          </div>
+          <div>
+            <div style="font-size: 15pt; font-weight: 800; color: var(--accent);">5 FILES</div>
+            <div style="font-size: 7.5pt; color: var(--text-muted); font-weight: 600;">EXFILTRATED ASSETS</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 9: Enterprise Remediation Strategies -->
+    <div>
+      <h2>9. Enterprise Remediation & Practical Mitigation Strategies</h2>
+      <div class="grid-2" style="margin-top: 4px;">
+        <div class="card">
+          <h3>Zero Trust Architecture (ZTA)</h3>
+          <p style="font-size: 8.2pt;">
+            Traditional perimeter models trust internal traffic. Under Zero Trust, every node-to-node transaction requires explicit authentication, authorization, and cryptographic verification, neutralizing unmitigated lateral traversal.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Micro-Segmentation</h3>
+          <p style="font-size: 8.2pt;">
+            Dividing corporate subnets into isolated security enclaves prevents worms from broadcasting across flat network segments. Isolated workstations cannot probe adjacent departmental servers.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Automated Patch Orchestration</h3>
+          <p style="font-size: 8.2pt;">
+            As proven by node PC5, timely patch delivery renders exploit payloads harmless. Automated CI/CD patch deployment drastically compresses adversary dwell time and exploitation windows.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Intrusion Detection & Honeypots</h3>
+          <p style="font-size: 8.2pt;">
+            Rapid BFS scanning generates telltale network noise. Behavioral IDS and decoy "canary" hosts can flag abnormal socket sweeps within seconds, triggering automated port isolation.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 10: Conclusion -->
+    <div class="card card-info" style="margin-top: 3px;">
+      <h3 style="color: var(--primary);">10. Conclusion & Strategic Assessment</h3>
+      <p style="font-size: 8.5pt;">
+        The Simple Worm Simulation demonstrates that cybersecurity resilience is not a single binary state, but an emergent property of topology, perimeter control, and endpoint hygiene. While unconstrained topological links allow worms to rapidly dominate flat subnets, strategic intervention through firewalls and software patch hardening effectively fractures the propagation graph, confining potential breaches to manageable blast radiuses.
+      </p>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>Technical Report &bull; Simple Worm Simulation Project</span>
+    <span>Page 4 of 4</span>
+  </div>
+</div>
+
+</body>
+</html>
+
